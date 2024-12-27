@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AI Text Detector</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="container">
+    <h1>AI Text Detection</h1>
+    <form id="newsForm">
+      <!-- Text Input Section -->
+      <div>
+        <label for="text">Enter a Text (Min 100 characters, Max 10000 characters):</label><br>
+        <textarea id="text" name="text" rows="20" cols="50" oninput="checkInput()"></textarea>
+        <span id="charCount"></span>
+        <span id="error" style="color: red;"></span>
+        <br><br>
+      </div>
+      <button type="button" onclick="classifyText()">Check Text</button>
+      <h2 style="margin-left: 280px;">OR</h2>
+      
+      <!-- Image Upload Section -->
+      <div>
+        <label for="image">Upload Image of Article:</label><br>
+        <input type="file" id="image" name="image" accept="image/*">
+      </div>
+
+      <button type="button" onclick="uploadAndClassifyImage()" id="uploadButton">Upload Image</button>
+      <br>
+      <button type="button" onclick="classifyImage()" id="classifyButton" disabled>Check Image</button>
+    </form>
+    <div id="result"></div>
+  </div>
+
+  <script>
+    let imagePath = '';
+
+    function checkInput() {
+      const textarea = document.getElementById('text');
+      const charCount = textarea.value.length;
+      document.getElementById('charCount').innerText = `(${charCount} characters)`;
+
+      const englishRegex = /^[A-Za-z0-9\s,.:;"'?!\/\\\-«»[\]()]*$/;
+      if (!englishRegex.test(textarea.value)) {
+        document.getElementById('error').innerText = "Only English characters, numbers, and punctuation marks are allowed.";
+        return false;
+      } else {
+        document.getElementById('error').innerText = "";
+      }
+
+      if (charCount < 100) {
+        document.getElementById('charCount').innerText = "Minimum 100 characters required.";
+        return false;
+      } else if (charCount > 10000) {
+        textarea.value = textarea.value.substring(0, 10000);
+        document.getElementById('charCount').innerText = "(Max 10000 characters)";
+        return false;
+      }
+
+      return true;
+    }
+
+    async function classifyText() {
+      if (!checkInput()) {
+        document.getElementById('result').innerText = 'Please make sure text length is within the required range and only English characters, numbers, and punctuation marks are allowed';
+        return;
+      }
+
+      const text = document.getElementById('text').value;
+
+      if (!text) {
+        document.getElementById('result').innerText = 'Please enter the article text';
+        return;
+      }
+
+      const formData = new FormData();
+      formData.append('text', text);
+      
+      document.getElementById('result').innerText = 'Processing...';
+
+      try {
+        const response = await fetch('http://127.0.0.1:8000/text check/', {
+          method: 'POST',
+          body: formData
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          const prediction = data.prediction;
+          const confidence = data.confidence ;
+          document.getElementById('result').innerHTML = `${prediction}`;
+        } else {
+          const errorData = await response.text();
+          throw new Error(`Failed to classify text. Server responded with status ${response.status}: ${errorData}`);
+        }
+      } catch (error) {
+        console.error(error);
+        document.getElementById('result').innerText = error.message;
+      }
+    }
+
+    // Upload image to server and get the path
+    async function uploadAndClassifyImage() {
+      const image = document.getElementById('image').files[0];
+
+      if (!image) {
+        document.getElementById('result').innerText = 'Please upload the article screenshot';
+        return;
+      }
+
+      const formData = new FormData();
+      formData.append('image', image);
+
+      const uploadButton = document.getElementById('uploadButton');
+      uploadButton.disabled = true;
+      uploadButton.style.backgroundColor = "#cccccc";
+      uploadButton.style.cursor = "not-allowed";
+      document.getElementById('result').innerText = 'Uploading...';
+
+      try {
+        const response = await fetch('http://127.0.0.1:8000/upload/', {
+          method: 'POST',
+          body: formData
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          imagePath = data.image_path; // Store the image path received from the server
+          document.getElementById('result').innerText = 'Image uploaded successfully!';
+          document.getElementById('classifyButton').disabled = false; // Enable the classify button
+        } else {
+          const errorData = await response.text();
+          throw new Error(`Failed to upload image. Server responded with status ${response.status}: ${errorData}`);
+        }
+      } catch (error) {
+        console.error(error);
+        document.getElementById('result').innerText = error.message;
+      } finally {
+        uploadButton.disabled = false;
+        uploadButton.style.backgroundColor = "";
+        uploadButton.style.cursor = "";
+      }
+    }
+
+    // Send the saved image path to the server for classification
+    async function classifyImage() {
+      if (!imagePath) {
+        document.getElementById('result').innerText = 'No image uploaded.';
+        return;
+      }
+
+      const formData = new FormData();
+      formData.append('image_path', imagePath); // Send the saved path, not the file
+
+      const classifyButton = document.getElementById('classifyButton');
+      classifyButton.disabled = true;
+      classifyButton.style.backgroundColor = "#cccccc";
+      classifyButton.style.cursor = "not-allowed";
+      document.getElementById('result').innerText = 'Processing...';
+
+      try {
+        const response = await fetch('http://127.0.0.1:8000/image check/', {
+          method: 'POST',
+          body: formData,
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          const prediction = data.prediction;
+          const confidence = data.confidence ;
+          document.getElementById('result').innerHTML = `${prediction} `;
+        } else {
+          const errorData = await response.text();
+          throw new Error(`Failed to classify image. Server responded with status ${response.status}: ${errorData}`);
+        }
+      } catch (error) {
+        console.error(error);
+        document.getElementById('result').innerText = error.message;
+      } finally {
+        classifyButton.disabled = false;
+        classifyButton.style.backgroundColor = "";
+        classifyButton.style.cursor = "";
+      }
+    }
+  </script>
+</body>
+</html>
